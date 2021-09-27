@@ -1,11 +1,10 @@
 import 'dart:async';
-import 'dart:developer';
-import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 ///
 /// Created by
@@ -41,6 +40,7 @@ class GifView extends StatefulWidget {
   final bool invertColors;
   final FilterQuality filterQuality;
   final bool isAntiAlias;
+  final String? _networkImageCacheKey;
 
   GifView.network(
     String url, {
@@ -63,7 +63,9 @@ class GifView extends StatefulWidget {
     this.onFinish,
     this.onStart,
     this.onFrame,
+    String? cacheKey,
   })  : image = NetworkImage(url),
+        _networkImageCacheKey = cacheKey,
         super(key: key);
 
   GifView.asset(
@@ -88,6 +90,7 @@ class GifView extends StatefulWidget {
     this.onStart,
     this.onFrame,
   })  : image = AssetImage(asset),
+        _networkImageCacheKey = null,
         super(key: key);
 
   GifView.memory(
@@ -112,6 +115,7 @@ class GifView extends StatefulWidget {
     this.onStart,
     this.onFrame,
   })  : image = MemoryImage(bytes),
+        _networkImageCacheKey = null,
         super(key: key);
 
   const GifView({
@@ -135,7 +139,8 @@ class GifView extends StatefulWidget {
     this.onFinish,
     this.onStart,
     this.onFrame,
-  }) : super(key: key);
+  })  : _networkImageCacheKey = null,
+        super(key: key);
 
   @override
   _GifViewState createState() => _GifViewState();
@@ -146,10 +151,12 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
   int currentIndex = 0;
   AnimationController? _controller;
   Tween<int> tweenFrames = Tween();
+  late final DefaultCacheManager _cachManager;
 
   @override
   void initState() {
     Future.delayed(Duration.zero, _loadImage);
+    _cachManager = DefaultCacheManager();
     super.initState();
   }
 
@@ -182,19 +189,6 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
     );
   }
 
-  final HttpClient _sharedHttpClient = HttpClient()..autoUncompress = false;
-
-  HttpClient get _httpClient {
-    HttpClient client = _sharedHttpClient;
-    assert(() {
-      if (debugNetworkImageHttpClientProvider != null) {
-        client = debugNetworkImageHttpClientProvider!();
-      }
-      return true;
-    }());
-    return client;
-  }
-
   String _getKeyImage(ImageProvider provider) {
     return provider is NetworkImage
         ? provider.url
@@ -215,15 +209,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
     }
 
     if (provider is NetworkImage) {
-      final Uri resolved = Uri.base.resolve(provider.url);
-      final HttpClientRequest request = await _httpClient.getUrl(resolved);
-      provider.headers?.forEach((String name, String value) {
-        request.headers.add(name, value);
-      });
-      final HttpClientResponse response = await request.close();
-      data = await consolidateHttpClientResponseBytes(
-        response,
-      );
+      data = await _downloadAndCacheNetworkImage(provider.url);
     } else if (provider is AssetImage) {
       AssetBundleImageKey key = await provider.obtainKey(const ImageConfiguration());
       data = await key.bundle.load(key.name);
@@ -280,19 +266,24 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
     }
   }
 
-  bool _isNetworkGifImage() {
-    if (widget.image is NetworkImage) {
-      final image = widget.image as NetworkImage;
-      final isGif = image.url.endsWith('.gif');
-      return isGif;
+  Future<Uint8List> _downloadAndCacheNetworkImage(String url) async {
+    final key = widget._networkImageCacheKey ?? url;
+    final fileInfo = await _cachManager.getFileFromCache(url);
+    final Uint8List _data;
+    if (fileInfo == null) {
+      final downloadedFile = await _cachManager.downloadFile(url, key: key);
+      _data = await downloadedFile.file.readAsBytes();
+    } else {
+      _data = await fileInfo.file.readAsBytes();
     }
-    return true;
+    return _data;
   }
 
   @override
   void dispose() {
     _controller?.removeListener(_listener);
     _controller?.dispose();
+    _cachManager.dispose();
     super.dispose();
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
@@ -212,6 +213,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
       frameList = _cache[key]!;
       return frameList;
     }
+
     if (provider is NetworkImage) {
       final Uri resolved = Uri.base.resolve(provider.url);
       final HttpClientRequest request = await _httpClient.getUrl(resolved);
@@ -223,8 +225,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
         response,
       );
     } else if (provider is AssetImage) {
-      AssetBundleImageKey key =
-          await provider.obtainKey(const ImageConfiguration());
+      AssetBundleImageKey key = await provider.obtainKey(const ImageConfiguration());
       data = await key.bundle.load(key.name);
     } else if (provider is FileImage) {
       data = await provider.file.readAsBytes();
@@ -232,8 +233,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
       data = provider.bytes;
     }
 
-    Codec? codec = await PaintingBinding.instance
-        ?.instantiateImageCodec(data.buffer.asUint8List());
+    Codec? codec = await PaintingBinding.instance?.instantiateImageCodec(data.buffer.asUint8List());
 
     if (codec != null) {
       for (int i = 0; i < codec.frameCount; i++) {
@@ -248,6 +248,9 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
 
   FutureOr _loadImage() async {
     frames = await fetchGif(widget.image);
+    if (widget.frameRate < 1) {
+      return setState(() => currentIndex = 1);
+    }
     tweenFrames = IntTween(begin: 0, end: frames.length - 1);
     int milli = ((frames.length / widget.frameRate) * 1000).ceil();
     Duration duration = Duration(
@@ -275,6 +278,15 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
         _controller?.forward(from: 0.0);
       }
     }
+  }
+
+  bool _isNetworkGifImage() {
+    if (widget.image is NetworkImage) {
+      final image = widget.image as NetworkImage;
+      final isGif = image.url.endsWith('.gif');
+      return isGif;
+    }
+    return true;
   }
 
   @override

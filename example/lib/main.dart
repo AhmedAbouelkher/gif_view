@@ -31,8 +31,6 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
- 
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -66,6 +64,11 @@ class _MyHomePageState extends State<MyHomePage> {
           const Divider(),
           GifView.network(
             'https://www.showmetech.com.br/wp-content/uploads/2015/09/happy-minion-gif.gif',
+            height: 200,
+            frameRate: 0,
+          ),
+          GifView.network(
+            'https://www.sdsd.com/wp-content/uploads/2020/04/New-SDSD.jpg',
             height: 200,
           ),
           GifView.network(

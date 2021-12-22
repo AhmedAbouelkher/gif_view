@@ -18,6 +18,23 @@ import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 /// Rafaelbarbosatec
 /// on 23/09/21
 
+//TODO: the user can choose to cache or not
+
+class CacheConfigs {
+  final String? cacheKey;
+  final BaseCacheManager? cacheManager;
+  final bool cache;
+
+  const CacheConfigs({
+    this.cacheKey,
+    this.cache = true,
+    this.cacheManager,
+  });
+
+  @override
+  String toString() => 'CacheConfigs(cacheKey: $cacheKey, cache: $cache)';
+}
+
 final Map<String, List<ImageInfo>> _cache = {};
 
 class GifView extends StatefulWidget {
@@ -40,7 +57,7 @@ class GifView extends StatefulWidget {
   final bool invertColors;
   final FilterQuality filterQuality;
   final bool isAntiAlias;
-  final String? _networkImageCacheKey;
+  final CacheConfigs? _cacheConfigs;
 
   GifView.network(
     String url, {
@@ -63,9 +80,9 @@ class GifView extends StatefulWidget {
     this.onFinish,
     this.onStart,
     this.onFrame,
-    String? cacheKey,
+    CacheConfigs? cacheConfigs,
   })  : image = NetworkImage(url),
-        _networkImageCacheKey = cacheKey,
+        _cacheConfigs = cacheConfigs,
         super(key: key);
 
   GifView.asset(
@@ -90,7 +107,7 @@ class GifView extends StatefulWidget {
     this.onStart,
     this.onFrame,
   })  : image = AssetImage(asset),
-        _networkImageCacheKey = null,
+        _cacheConfigs = null,
         super(key: key);
 
   GifView.memory(
@@ -115,7 +132,7 @@ class GifView extends StatefulWidget {
     this.onStart,
     this.onFrame,
   })  : image = MemoryImage(bytes),
-        _networkImageCacheKey = null,
+        _cacheConfigs = null,
         super(key: key);
 
   const GifView({
@@ -139,7 +156,7 @@ class GifView extends StatefulWidget {
     this.onFinish,
     this.onStart,
     this.onFrame,
-  })  : _networkImageCacheKey = null,
+  })  : _cacheConfigs = null,
         super(key: key);
 
   @override
@@ -151,12 +168,14 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
   int currentIndex = 0;
   AnimationController? _controller;
   Tween<int> tweenFrames = Tween();
-  late final DefaultCacheManager _cachManager;
+  BaseCacheManager? _cacheManager;
 
   @override
   void initState() {
     Future.delayed(Duration.zero, _loadImage);
-    _cachManager = DefaultCacheManager();
+    if (widget._cacheConfigs != null && widget._cacheConfigs!.cache) {
+      _cacheManager = widget._cacheConfigs?.cacheManager ?? DefaultCacheManager();
+    }
     super.initState();
   }
 
@@ -266,13 +285,13 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
     }
   }
 
-  Future<Uint8List> _downloadAndCacheNetworkImage(String url) async {
-    final key = widget._networkImageCacheKey ?? url;
-    final fileInfo = await _cachManager.getFileFromCache(url);
-    final Uint8List _data;
+  Future<Uint8List?> _downloadAndCacheNetworkImage(String url) async {
+    final key = widget._cacheConfigs?.cacheKey ?? url;
+    final fileInfo = await _cacheManager?.getFileFromCache(url);
+    final Uint8List? _data;
     if (fileInfo == null) {
-      final downloadedFile = await _cachManager.downloadFile(url, key: key);
-      _data = await downloadedFile.file.readAsBytes();
+      final downloadedFile = await _cacheManager?.downloadFile(url, key: key);
+      _data = await downloadedFile?.file.readAsBytes();
     } else {
       _data = await fileInfo.file.readAsBytes();
     }
@@ -283,7 +302,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
   void dispose() {
     _controller?.removeListener(_listener);
     _controller?.dispose();
-    _cachManager.dispose();
+    _cacheManager?.dispose();
     super.dispose();
   }
 }

@@ -1,10 +1,12 @@
 import 'dart:async';
+// import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
+import 'package:http/http.dart' as http;
 
 ///
 /// Created by
@@ -170,10 +172,12 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
   Tween<int> tweenFrames = Tween();
   BaseCacheManager? _cacheManager;
 
+  bool get cacheEnabled => widget._cacheConfigs != null && widget._cacheConfigs!.cache;
+
   @override
   void initState() {
     Future.delayed(Duration.zero, _loadImage);
-    if (widget._cacheConfigs != null && widget._cacheConfigs!.cache) {
+    if (cacheEnabled) {
       _cacheManager = widget._cacheConfigs?.cacheManager ?? DefaultCacheManager();
     }
     super.initState();
@@ -228,7 +232,7 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
     }
 
     if (provider is NetworkImage) {
-      data = await _downloadAndCacheNetworkImage(provider.url);
+      data = await _fetchNetwordImage(provider.url);
     } else if (provider is AssetImage) {
       AssetBundleImageKey key = await provider.obtainKey(const ImageConfiguration());
       data = await key.bundle.load(key.name);
@@ -283,6 +287,36 @@ class _GifViewState extends State<GifView> with TickerProviderStateMixin {
         _controller?.forward(from: 0.0);
       }
     }
+  }
+
+  // final HttpClient _sharedHttpClient = HttpClient()..autoUncompress = false;
+
+  // HttpClient get _httpClient {
+  //   HttpClient client = _sharedHttpClient;
+  //   assert(() {
+  //     if (debugNetworkImageHttpClientProvider != null) {
+  //       client = debugNetworkImageHttpClientProvider!();
+  //     }
+  //     return true;
+  //   }());
+  //   return client;
+  // }
+
+  //   final Uri resolved = Uri.base.resolve(url);
+  // final HttpClientRequest request = await _httpClient.getUrl(resolved);
+  // final HttpClientResponse response = await request.close();
+  // return await consolidateHttpClientResponseBytes(response);
+
+  Future<Uint8List> _fetchNetwordImage(String url) async {
+    final Uint8List _data;
+    if (cacheEnabled) {
+      _data = (await _downloadAndCacheNetworkImage(url))!;
+    } else {
+      final response = await http.get(Uri.parse(url));
+      _data = response.bodyBytes;
+    }
+
+    return _data;
   }
 
   Future<Uint8List?> _downloadAndCacheNetworkImage(String url) async {
